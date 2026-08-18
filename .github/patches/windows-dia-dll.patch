@@ -1,0 +1,89 @@
+diff --git a/engine/src/flutter/tools/dia_dll.py b/engine/src/flutter/tools/dia_dll.py
+index 9cc3bf5..3106c3c 100644
+--- a/engine/src/flutter/tools/dia_dll.py
++++ b/engine/src/flutter/tools/dia_dll.py
+@@ -11,10 +11,12 @@ It is used on Windows platforms to copy the correct msdia*.dll to the
+ clang folder, as a "gclient hook".
+ """
+ 
+-import os
+-import shutil
+-import stat
+-import sys
++import glob
++import os
++import shutil
++import stat
++import subprocess
++import sys
+ 
+ # Path constants. (All of these should be absolute paths.)
+ THIS_DIR = os.path.abspath(os.path.dirname(__file__))
+@@ -57,8 +59,43 @@ def GetDiaDll():
+       vs_path = vs_toolchain.DetectVisualStudioPath()
+     dia_path = os.path.join(vs_path, 'DIA SDK', 'bin', 'amd64')
+ 
+-  os.environ = environ_bak
+-  return os.path.join(dia_path, DIA_DLL[msvs_version])
++  os.environ = environ_bak
++  return os.path.join(dia_path, DIA_DLL[msvs_version])
++
++
++def FindDiaDll():
++  """Get an existing msdia*.dll, searching alternate Visual Studio installs."""
++  dia_dll = GetDiaDll()
++  if os.path.isfile(dia_dll):
++    return dia_dll
++
++  dia_dll_name = os.path.basename(dia_dll)
++  vswhere = os.path.join(
++      os.environ.get('ProgramFiles(x86)', r'C:\Program Files (x86)'),
++      'Microsoft Visual Studio', 'Installer', 'vswhere.exe')
++  if os.path.isfile(vswhere):
++    try:
++      output = subprocess.run(
++          [vswhere, '-all', '-products', '*', '-property', 'installationPath'],
++          capture_output=True, check=False).stdout.decode('utf-8', errors='replace')
++    except OSError:
++      output = ''
++    for line in output.splitlines():
++      candidate = os.path.join(
++          line.strip(), 'DIA SDK', 'bin', 'amd64', dia_dll_name)
++      if os.path.isfile(candidate):
++        return candidate
++
++  for root in (
++      r'C:\Program Files\Microsoft Visual Studio',
++      r'C:\Program Files (x86)\Microsoft Visual Studio',
++  ):
++    pattern = os.path.join(
++        root, '*', '*', 'DIA SDK', 'bin', 'amd64', dia_dll_name)
++    for candidate in glob.glob(pattern):
++      if os.path.isfile(candidate):
++        return candidate
++  return None
+ 
+ 
+ def CopyFile(src, dst):
+@@ -67,10 +104,17 @@ def CopyFile(src, dst):
+   shutil.copy(src, dst)
+ 
+ 
+-def CopyDiaDllTo(target_dir):
+-  # This script always wants to use the 64-bit msdia*.dll.
+-  dia_dll = GetDiaDll()
+-  CopyFile(dia_dll, target_dir)
++def CopyDiaDllTo(target_dir):
++  # This script always wants to use the 64-bit msdia*.dll.
++  dia_dll = FindDiaDll()
++  if not dia_dll:
++    print(
++        'WARNING: msdia*.dll was not found in any Visual Studio install; '
++        'skipping the DIA SDK copy. The engine can still build without it.',
++        flush=True)
++    return
++  os.makedirs(target_dir, exist_ok=True)
++  CopyFile(dia_dll, target_dir)
+ 
+ 
+ def main():

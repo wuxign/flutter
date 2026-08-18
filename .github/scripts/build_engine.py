@@ -19,9 +19,7 @@ source_dir = os.environ.get('ENGINE_SOURCE_DIR')
 REPO_ROOT = os.path.abspath(source_dir) if source_dir else WORKFLOW_ROOT
 ENGINE_SRC = os.path.join(REPO_ROOT, 'engine', 'src')
 THIRD_PARTY_ROOT = os.path.join(ENGINE_SRC, 'third_party')
-WINDOWS_BUILD_GN_PATCH = os.path.join(
-    WORKFLOW_ROOT, '.github', 'patches', 'windows-vc-ltl.patch'
-)
+PATCHES_DIR = os.path.join(WORKFLOW_ROOT, '.github', 'patches')
 VC_LTL_URL = (
     'https://github.com/Chuyu-Team/VC-LTL5/releases/download/'
     'v5.3.1/VC-LTL-Binary.7z'
@@ -64,31 +62,37 @@ def git_apply_check(patch, reverse=False, ignore_whitespace=False):
     return subprocess.run(args, cwd=REPO_ROOT, capture_output=True)
 
 
-def apply_build_patch():
-    if host_os() != 'windows':
-        return
-    if not os.path.isfile(WINDOWS_BUILD_GN_PATCH):
-        raise SystemExit(
-            'Windows BUILD.gn patch not found: %s' % WINDOWS_BUILD_GN_PATCH
-        )
-    patch = WINDOWS_BUILD_GN_PATCH
+def apply_build_patch(patch):
     if git_apply_check(patch).returncode == 0:
         run(['git', 'apply', patch], REPO_ROOT)
         return
     if git_apply_check(patch, reverse=True).returncode == 0:
-        print('Windows BUILD.gn patch already applied; skipping.', flush=True)
+        print('%s already applied; skipping.' % os.path.basename(patch), flush=True)
         return
     if git_apply_check(patch, ignore_whitespace=True).returncode == 0:
         run(['git', 'apply', '--ignore-whitespace', patch], REPO_ROOT)
         return
     if git_apply_check(patch, reverse=True, ignore_whitespace=True).returncode == 0:
-        print('Windows BUILD.gn patch already applied; skipping.', flush=True)
+        print('%s already applied; skipping.' % os.path.basename(patch), flush=True)
         return
     raise SystemExit(
-        'Unable to apply Windows BUILD.gn patch to the selected ref. '
-        'The ref must contain a matching '
-        'engine/src/flutter/shell/platform/windows/BUILD.gn.'
+        'Unable to apply %s to the selected ref. The ref must contain a '
+        'matching target file.' % os.path.basename(patch)
     )
+
+
+def apply_build_patches():
+    if host_os() != 'windows':
+        return
+    patches = sorted(
+        os.path.join(PATCHES_DIR, name)
+        for name in os.listdir(PATCHES_DIR)
+        if name.endswith('.patch')
+    )
+    if not patches:
+        raise SystemExit('No build patches found in %s' % PATCHES_DIR)
+    for patch in patches:
+        apply_build_patch(patch)
 
 
 def repo_url():
@@ -185,6 +189,7 @@ def write_gclient(target):
 
 
 def sync():
+    apply_build_patches()
     target = env_value('ENGINE_TARGET', 'host')
     write_gclient(target)
     if os.name == 'nt':
@@ -263,7 +268,7 @@ def run_ninja(label):
 
 
 def build():
-    apply_build_patch()
+    apply_build_patches()
     prepare_third_party()
     target = env_value('ENGINE_TARGET', 'host')
     runtime_mode = env_value('ENGINE_RUNTIME_MODE', 'debug')
@@ -287,6 +292,7 @@ def build():
         configs.append(('macos', cpu, simulator))
     elif target == 'windows':
         configs.append(('windows', cpu, simulator))
+        configs.append(('host', '', False))
 
     labels = {}
     for key, config_cpu, config_simulator in configs:
