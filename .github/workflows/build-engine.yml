@@ -120,23 +120,20 @@ jobs:
             exit 1
           fi
           SETUP_EXE="/c/Program Files (x86)/Microsoft Visual Studio/Installer/setup.exe"
-          for attempt in 1 2 3; do
-            echo "Installing Windows SDK 10.0.22621 (attempt $attempt)"
-            if "$SETUP_EXE" modify \
-              --installPath "$VS_PATH" \
-              --add Microsoft.VisualStudio.Component.Windows11SDK.22621 \
-              --add Microsoft.VisualStudio.Component.Windows11SDK.22621.Desktop.Cpp \
-              --quiet --norestart; then
-              for _ in {1..60}; do
-                if [ -d "$SDK_INCLUDE/um" ]; then
-                  echo "Windows SDK 10.0.22621 is ready"
-                  exit 0
-                fi
-                sleep 5
-              done
-            fi
-            sleep 15
-          done
+          echo "Installing Windows SDK 10.0.22621"
+          if "$SETUP_EXE" modify \
+            --installPath "$VS_PATH" \
+            --add Microsoft.VisualStudio.Component.Windows11SDK.22621 \
+            --add Microsoft.VisualStudio.Component.Windows11SDK.22621.Desktop.Cpp \
+            --quiet --norestart; then
+            for _ in {1..60}; do
+              if [ -d "$SDK_INCLUDE/um" ]; then
+                echo "Windows SDK 10.0.22621 is ready"
+                exit 0
+              fi
+              sleep 5
+            done
+          fi
           echo "Windows SDK 10.0.22621 installation failed." >&2
           exit 1
 
