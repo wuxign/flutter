@@ -104,37 +104,21 @@ jobs:
           echo "GYP_MSVS_OVERRIDE_PATH=$VS_PATH" >> "$GITHUB_ENV"
           echo "Using Visual Studio: $VS_PATH"
 
-      - name: Install Windows SDK 10.0.22621
+      - name: Check Windows SDK
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          SDK_INCLUDE="/c/Program Files (x86)/Windows Kits/10/Include/10.0.22621.0"
-          if [ -d "$SDK_INCLUDE/um" ]; then
-            echo "Windows SDK 10.0.22621 is already installed"
-            exit 0
-          fi
-          VSWHERE="/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
-          VS_PATH="$("$VSWHERE" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>/dev/null | tail -n 1)"
-          if [ -z "$VS_PATH" ]; then
-            echo "No Visual Studio installation with VC++ tools found." >&2
-            exit 1
-          fi
-          SETUP_EXE="/c/Program Files (x86)/Microsoft Visual Studio/Installer/setup.exe"
-          echo "Installing Windows SDK 10.0.22621"
-          if "$SETUP_EXE" modify \
-            --installPath "$VS_PATH" \
-            --add Microsoft.VisualStudio.Component.Windows11SDK.22621 \
-            --quiet --norestart; then
-            for _ in {1..60}; do
-              if [ -d "$SDK_INCLUDE/um" ]; then
-                echo "Windows SDK 10.0.22621 is ready"
-                exit 0
-              fi
-              sleep 5
-            done
-          fi
-          echo "Windows SDK 10.0.22621 installation failed." >&2
-          exit 1
+          echo "=== Windows SDK ==="
+          ls -la "/c/Program Files (x86)/Windows Kits/10/Include" || true
+
+          echo "=== Windows SDK Lib ==="
+          ls -la "/c/Program Files (x86)/Windows Kits/10/Lib" || true
+
+          echo "=== Visual Studio ==="
+          "/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe" \
+            -latest \
+            -products '*' \
+            -property installationPath
 
       - name: Bootstrap and sync gclient
         shell: bash
