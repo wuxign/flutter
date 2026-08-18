@@ -1,0 +1,68 @@
+diff --git a/engine/src/flutter/shell/platform/windows/BUILD.gn b/engine/src/flutter/shell/platform/windows/BUILD.gn
+index a6af78f4f44..c72595193ca 100644
+--- a/engine/src/flutter/shell/platform/windows/BUILD.gn
++++ b/engine/src/flutter/shell/platform/windows/BUILD.gn
+@@ -14,6 +14,47 @@ config("relative_angle_headers") {
+   include_dirs = [ "//flutter/third_party/angle/include" ]
+ }
+ 
++# VC-LTL configuration for smaller binaries using system CRT
++config("vc_ltl") {
++  # Default to Windows Vista+ compatibility (6.0.6000.0)
++  # Other options: 5.1.2600.0 (XP), 6.2.9200.0 (Win8), 10.0.10240.0 (Win10)
++  _vc_ltl_version = "6.0.6000.0"
++  _vc_ltl_root = "//third_party/VC-LTL-Binary"
++
++  # Map target_cpu to VC-LTL platform names
++  if (target_cpu == "x86") {
++    _vc_ltl_platform = "Win32"
++  } else if (target_cpu == "x64") {
++    _vc_ltl_platform = "x64"
++  } else if (target_cpu == "arm") {
++    _vc_ltl_platform = "arm"
++  } else if (target_cpu == "arm64") {
++    _vc_ltl_platform = "arm64"
++  }
++
++  # Add VC-LTL headers BEFORE system headers (like CMake's BEFORE SYSTEM)
++  include_dirs = [
++    "$_vc_ltl_root/TargetPlatform/header",
++    "$_vc_ltl_root/TargetPlatform/$_vc_ltl_version/header",
++  ]
++
++  # Add VC-LTL library search path - must be FIRST so linker finds VC-LTL libs
++  lib_dirs = [ "$_vc_ltl_root/TargetPlatform/$_vc_ltl_version/lib/$_vc_ltl_platform" ]
++
++  # Explicitly link VC-LTL CRT libraries to ensure they override MSVC defaults
++  # These replace vcruntime.lib and ucrt.lib from MSVC
++  libs = [
++    "libvcruntime.lib",  # Static CRT that redirects to system msvcrt.dll
++    "libucrt.lib",       # Static UCRT that redirects to system ucrtbase.dll
++  ]
++
++  # Add preprocessor defines for VC-LTL
++  defines = [
++    "_Build_By_LTL=1",
++    "_LTL_Core_Version=5",
++  ]
++}
++
+ # Any files that are built by clients (client_wrapper code, library headers for
+ # implementations using this shared code, etc.) include the public headers
+ # assuming they are in the include path. This configuration should be added to
+@@ -156,7 +197,15 @@ source_set("flutter_windows_source") {
+     "imm32.lib",
+   ]
+ 
++  # Add YY-Thunks for Windows compatibility
++  if (target_cpu == "x64") {
++    libs += [ "//third_party/YY-Thunks-Objs/objs/x64/YY_Thunks_for_Win7.obj" ]
++  } else if (target_cpu == "x86") {
++    libs += [ "//third_party/YY-Thunks-Objs/objs/x86/YY_Thunks_for_Win7.obj" ]
++  }
++
+   configs += [
++    ":vc_ltl",  # Apply VC-LTL for smaller binaries
+     "//flutter/shell/platform/common:desktop_library_implementation",
+     "//flutter/third_party/angle:gl_prototypes",
+   ]

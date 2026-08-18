@@ -1,0 +1,115 @@
+name: Build Flutter Engine
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Engine target to build
+        type: choice
+        options:
+          - host
+          - android
+          - ios
+          - macos
+          - windows
+        default: host
+      runtime_mode:
+        description: Dart runtime mode
+        type: choice
+        options:
+          - debug
+          - profile
+          - release
+        default: debug
+      optimized:
+        description: Build with compiler optimizations (slower and larger)
+        type: boolean
+        default: false
+      cpu:
+        description: 'Target CPU (arm64, x64, x86). Leave empty for defaults.'
+        type: string
+        default: ''
+      simulator:
+        description: Build the iOS simulator instead of a device build
+        type: boolean
+        default: false
+      ref:
+        description: 'Git ref (branch/tag/SHA) to build. Leave empty for the workflow branch. The ref does not need to contain this workflow.'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: engine-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DEPOT_TOOLS_DIR: ${{ runner.temp }}/depot_tools
+  ENGINE_TARGET: ${{ inputs.target }}
+  ENGINE_RUNTIME_MODE: ${{ inputs.runtime_mode }}
+  ENGINE_OPTIMIZED: ${{ inputs.optimized }}
+  ENGINE_CPU: ${{ inputs.cpu }}
+  ENGINE_SIMULATOR: ${{ inputs.simulator }}
+  ENGINE_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+  ENGINE_SOURCE_DIR: ${{ github.workspace }}/source
+
+jobs:
+  build-engine:
+    runs-on: >-
+      ${{ contains(fromJSON('["macos","ios"]'), inputs.target) && 'macos-latest' ||
+      contains(fromJSON('["windows"]'), inputs.target) && 'windows-latest' ||
+      'ubuntu-latest' }}
+    timeout-minutes: 360
+    steps:
+      - name: Checkout workflow
+        uses: actions/checkout@v4
+        with:
+          path: workflow
+          ref: ${{ github.ref }}
+          fetch-depth: 1
+
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          path: source
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install depot_tools
+        shell: bash
+        run: |
+          git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git "$DEPOT_TOOLS_DIR"
+          echo "$DEPOT_TOOLS_DIR" >> "$GITHUB_PATH"
+
+      - name: Configure Windows toolchain
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          echo "DEPOT_TOOLS_WIN_TOOLCHAIN=0" >> "$GITHUB_ENV"
+          echo "GYP_MSVS_OVERRIDE_PATH=C:\Program Files\Microsoft Visual Studio\2022\Enterprise" >> "$GITHUB_ENV"
+          echo "WINDOWSSDKDIR=C:\Program Files (x86)\Windows Kits\10" >> "$GITHUB_ENV"
+          git config --global core.longpaths true
+
+      - name: Bootstrap and sync gclient
+        shell: bash
+        run: python workflow/.github/scripts/build_engine.py sync
+
+      - name: Generate and build engine
+        shell: bash
+        run: python workflow/.github/scripts/build_engine.py build
+
+      - name: Upload engine artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-${{ inputs.target }}-${{ inputs.runtime_mode }}-${{ github.sha }}
+          path: source/engine/src/out
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
