@@ -1,0 +1,40 @@
+diff --git a/engine/src/build/toolchain/win/setup_toolchain.py b/engine/src/build/toolchain/win/setup_toolchain.py
+index 521c24398ef..191da4b70ec 100644
+--- a/engine/src/build/toolchain/win/setup_toolchain.py
++++ b/engine/src/build/toolchain/win/setup_toolchain.py
+@@ -25,6 +25,26 @@ SCRIPT_DIR = os.path.dirname(__file__)
+ SDK_VERSION = '10.0.22621.0'
+ 
+ 
++def _NewestInstalledSdkVersion(sdk_dir):
++  """Return the Windows SDK version to pass to vcvarsall.bat.
++
++  Prefer the pinned |SDK_VERSION| when it is installed; otherwise use the
++  newest version available under |sdk_dir| so the build can run on hosts
++  that only carry a newer SDK.
++  """
++  include_root = os.path.join(sdk_dir, 'Include')
++  if os.path.isdir(os.path.join(include_root, SDK_VERSION)):
++    return SDK_VERSION
++  versions = []
++  if os.path.isdir(include_root):
++    for name in os.listdir(include_root):
++      if re.match(r'^10\.\d+\.\d+\.\d+$', name):
++        versions.append(tuple(int(part) for part in name.split('.')))
++  if not versions:
++    return SDK_VERSION
++  return '.'.join(str(part) for part in max(versions))
++
++
+ def _ExtractImportantEnvironment(output_of_set):
+   """Extracts environment variables required for the toolchain to run from
+   a textual dump output by the cmd.exe 'set' command."""
+@@ -185,7 +205,7 @@ def _LoadToolchainEnv(cpu, toolchain_root, sdk_dir, target_store):
+     # Explicitly specifying the SDK version to build with to avoid accidentally
+     # building with a new and untested SDK. This should stay in sync with the
+     # packaged toolchain in build/vs_toolchain.py.
+-    args.append(SDK_VERSION)
++    args.append(_NewestInstalledSdkVersion(sdk_dir))
+     variables = _LoadEnvFromBat(args)
+   return _ExtractImportantEnvironment(variables)
+ 
