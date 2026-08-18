@@ -124,7 +124,6 @@ jobs:
           if "$SETUP_EXE" modify \
             --installPath "$VS_PATH" \
             --add Microsoft.VisualStudio.Component.Windows11SDK.22621 \
-            --add Microsoft.VisualStudio.Component.Windows11SDK.22621.Desktop.Cpp \
             --quiet --norestart; then
             for _ in {1..60}; do
               if [ -d "$SDK_INCLUDE/um" ]; then
