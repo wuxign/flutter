@@ -128,11 +128,16 @@ jobs:
         shell: bash
         run: python workflow/.github/scripts/build_engine.py build
 
+      - name: Remove intermediate object files
+        shell: bash
+        run: |
+          find source/engine/src/out -type d \( -name obj -o -name obj.host \) -prune -exec rm -rf {} +
+
       - name: Upload engine artifacts
         uses: actions/upload-artifact@v4
         with:
           name: engine-${{ inputs.target }}-${{ inputs.runtime_mode }}-${{ github.sha }}
           path: source/engine/src/out
           if-no-files-found: error
-          compression-level: 0
+          compression-level: 6
           retention-days: 7
