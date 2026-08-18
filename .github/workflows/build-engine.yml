@@ -53,7 +53,6 @@ jobs:
       'ubuntu-latest' }}
     timeout-minutes: 360
     env:
-      DEPOT_TOOLS_DIR: ${{ runner.temp }}/depot_tools
       ENGINE_TARGET: ${{ inputs.target }}
       ENGINE_RUNTIME_MODE: ${{ inputs.runtime_mode }}
       ENGINE_OPTIMIZED: ${{ inputs.optimized }}
@@ -83,6 +82,8 @@ jobs:
 
       - name: Install depot_tools
         shell: bash
+        env:
+          DEPOT_TOOLS_DIR: ${{ runner.temp }}/depot_tools
         run: |
           git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git "$DEPOT_TOOLS_DIR"
           echo "$DEPOT_TOOLS_DIR" >> "$GITHUB_PATH"
